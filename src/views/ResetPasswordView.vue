@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 type ResetPasswordResponse = {
@@ -18,6 +18,7 @@ const isNewPasswordVisible = ref(false)
 const isConfirmPasswordVisible = ref(false)
 const statusMessage = ref('')
 const statusType = ref<'success' | 'error' | ''>('')
+let redirectTimeoutId: number | null = null
 
 const userId = computed(() => {
     const value = route.query.userId
@@ -127,6 +128,10 @@ async function handleSubmit() {
         statusMessage.value = translateMessage(data?.message || data?.Message || 'Senha redefinida com sucesso.')
         newPassword.value = ''
         confirmPassword.value = ''
+
+        redirectTimeoutId = window.setTimeout(() => {
+            void router.push({ path: '/', query: { reset: 'success' } })
+        }, 1400)
     } catch (error) {
         statusType.value = 'error'
         statusMessage.value = error instanceof Error ? error.message : 'Erro inesperado ao redefinir a senha.'
@@ -134,6 +139,12 @@ async function handleSubmit() {
         isLoading.value = false
     }
 }
+
+onBeforeUnmount(() => {
+    if (redirectTimeoutId !== null) {
+        window.clearTimeout(redirectTimeoutId)
+    }
+})
 </script>
 
 <template>

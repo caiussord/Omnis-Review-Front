@@ -24,9 +24,9 @@ function translateMessage(message: string): string {
     if (normalizedMessage.includes('User not found')) {
         return 'Nao encontramos um usuario com esses dados.'
     }
-
-    if (normalizedMessage.includes('Password reset email sent')) {
-        return 'Se os dados estiverem corretos, enviamos o link de redefinicao.'
+ 
+    if (normalizedMessage.includes('If the account exists, a reset link was sent.')) {
+        return 'Caso seu dado esteja correto foi enviado um link de redefinicao de senha para seu email.'
     }
 
     return normalizedMessage
@@ -69,7 +69,7 @@ async function handleSubmit() {
         }
 
         statusType.value = 'success'
-        statusMessage.value = translateMessage(data?.message || data?.Message || 'Se os dados estiverem corretos, enviamos o link de redefinicao.')
+        statusMessage.value = translateMessage(data?.message || data?.Message || 'Caso seu dado esteja correto foi enviado um link de redefinição de senha para seu e-mail.')
     } catch (error) {
         statusType.value = 'error'
         statusMessage.value = error instanceof Error ? error.message : 'Erro inesperado ao solicitar a redefinicao.'
@@ -104,10 +104,6 @@ async function handleSubmit() {
 
             <button class="forgot-back" type="button" @click="router.push('/')">
                 Voltar para o login
-            </button>
-
-            <button class="forgot-link" type="button" @click="router.push('/reset-password')">
-                Ja recebi o link de redefinicao
             </button>
 
             <p v-if="statusMessage" class="forgot-status"

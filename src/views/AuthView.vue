@@ -1,6 +1,6 @@
 ﻿<script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { AuthModeSwitch, LoginForm, RegisterForm } from '../components/auth'
 import type { LoginPayload, Mode, RegisterFormPayload, RegisterPayload } from '../types/auth'
 
@@ -16,6 +16,7 @@ const isLoading = ref(false)
 const statusMessage = ref('')
 const statusType = ref<'success' | 'error' | ''>('')
 const router = useRouter()
+const route = useRoute()
 
 const apiBase = '/api/auth'
 
@@ -163,6 +164,14 @@ async function submitRegister(payload: RegisterFormPayload) {
     isLoading.value = false
   }
 }
+
+onMounted(async () => {
+  if (route.query.reset === 'success') {
+    mode.value = 'login'
+    setStatus('success', 'Senha alterada com sucesso. Faca login com a nova senha.')
+    await router.replace({ path: '/' })
+  }
+})
 </script>
 
 <template>
