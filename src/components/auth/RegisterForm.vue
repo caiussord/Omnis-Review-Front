@@ -92,6 +92,12 @@ async function checkUsernameAvailability(username: string) {
     })
 
     if (!response.ok) {
+      if (response.status === 400) {
+        usernameCheckState.value = 'error'
+        usernameCheckMessage.value = 'Informe um nome de usuario.'
+        return
+      }
+
       throw new Error('Falha ao verificar o nome de usuario.')
     }
 

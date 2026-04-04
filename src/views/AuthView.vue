@@ -177,7 +177,8 @@ async function submitRegister(payload: RegisterFormPayload) {
 
       <AuthModeSwitch :mode="mode" @select="selectMode" />
 
-      <LoginForm v-if="mode === 'login'" :is-loading="isLoading" @submit="submitLogin" />
+      <LoginForm v-if="mode === 'login'" :is-loading="isLoading" @submit="submitLogin"
+        @forgot-password="router.push('/forgot-password')" />
       <RegisterForm v-else :is-loading="isLoading" :backend-base-url="apiBase" @submit="submitRegister" />
 
       <p v-if="statusMessage" class="auth-status"
