@@ -8,6 +8,7 @@ defineProps<{
 
 const emit = defineEmits<{
   submit: [payload: LoginPayload]
+  forgotPassword: []
 }>()
 
 const form = reactive<LoginPayload>({
@@ -52,6 +53,10 @@ function handleSubmit() {
         Entrando...
       </span>
       <span v-else>Entrar</span>
+    </button>
+
+    <button class="auth-forgot-password" type="button" @click="emit('forgotPassword')">
+      Esqueci minha senha
     </button>
   </form>
 </template>
@@ -153,5 +158,21 @@ function handleSubmit() {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
+}
+
+.auth-forgot-password {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #bfdbfe;
+  text-align: center;
+  cursor: pointer;
+  transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+.auth-forgot-password:hover {
+  color: #ffffff;
 }
 </style>
