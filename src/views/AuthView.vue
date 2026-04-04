@@ -1,7 +1,8 @@
 ﻿<script setup lang="ts">
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { AuthModeSwitch, LoginForm, RegisterForm } from '../components/auth'
-import type { LoginPayload, Mode, RegisterPayload } from '../types/auth'
+import type { LoginPayload, Mode, RegisterFormPayload, RegisterPayload } from '../types/auth'
 
 type AuthResponse = {
   token?: string
@@ -14,8 +15,13 @@ const mode = ref<Mode>('login')
 const isLoading = ref(false)
 const statusMessage = ref('')
 const statusType = ref<'success' | 'error' | ''>('')
+const router = useRouter()
 
 const apiBase = '/api/auth'
+
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
 
 function selectMode(nextMode: Mode) {
   mode.value = nextMode
@@ -26,6 +32,40 @@ function selectMode(nextMode: Mode) {
 function setStatus(type: 'success' | 'error', message: string) {
   statusType.value = type
   statusMessage.value = message
+}
+
+function translateAuthMessage(message: string): string {
+  const normalizedMessage = message.trim()
+
+  if (normalizedMessage.includes('Email already exists')) {
+    return 'Este email ja esta em uso.'
+  }
+
+  if (normalizedMessage.includes('Username already exists')) {
+    return 'Este nome de usuario ja esta em uso.'
+  }
+
+  if (normalizedMessage.includes('Username already exists!')) {
+    return 'Este nome de usuario ja esta em uso.'
+  }
+
+  if (normalizedMessage.includes('User created successfully')) {
+    return 'Usuario criado com sucesso.'
+  }
+
+  if (normalizedMessage.includes('User creation failed Errors:')) {
+    return normalizedMessage.replace('User creation failed Errors:', 'Falha ao criar usuario. Erros:')
+  }
+
+  if (normalizedMessage.includes('Invalid login attempt')) {
+    return 'Email, usuario ou senha invalidos.'
+  }
+
+  if (normalizedMessage.includes('Unauthorized')) {
+    return 'Nao foi possivel autenticar com os dados informados.'
+  }
+
+  return normalizedMessage
 }
 
 async function postAuth<TPayload extends Record<string, string>>(endpoint: 'login' | 'register', payload: TPayload) {
@@ -47,7 +87,7 @@ async function postAuth<TPayload extends Record<string, string>>(endpoint: 'logi
 
   if (!response.ok) {
     const errorMessage = data?.message || data?.Message || 'Nao foi possivel concluir a requisicao.'
-    throw new Error(errorMessage)
+    throw new Error(translateAuthMessage(errorMessage))
   }
 
   return data
@@ -55,7 +95,7 @@ async function postAuth<TPayload extends Record<string, string>>(endpoint: 'logi
 
 async function submitLogin(payload: LoginPayload) {
   if (!payload.email || !payload.password) {
-    setStatus('error', 'Preencha email e senha para entrar.')
+    setStatus('error', 'Preencha email, usuario e senha para entrar.')
     return
   }
 
@@ -74,31 +114,50 @@ async function submitLogin(payload: LoginPayload) {
     }
 
     setStatus('success', 'Login realizado com sucesso.')
+    await router.push('/blank')
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Erro inesperado ao fazer login.'
+    const message = error instanceof Error ? translateAuthMessage(error.message) : 'Erro inesperado ao fazer login.'
     setStatus('error', message)
   } finally {
     isLoading.value = false
   }
 }
 
-async function submitRegister(payload: RegisterPayload) {
-  if (!payload.name || !payload.email || !payload.userName || !payload.birth_Date || !payload.password) {
+async function submitRegister(payload: RegisterFormPayload) {
+  if (!payload.name || !payload.email || !payload.userName || !payload.birth_Date || !payload.password || !payload.confirmPassword) {
     setStatus('error', 'Preencha todos os campos do cadastro.')
     return
+  }
+
+  if (!isValidEmail(payload.email)) {
+    setStatus('error', 'Digite um email valido.')
+    return
+  }
+
+  if (payload.password !== payload.confirmPassword) {
+    setStatus('error', 'As senhas nao conferem.')
+    return
+  }
+
+  const registerPayload: RegisterPayload = {
+    name: payload.name,
+    email: payload.email,
+    userName: payload.userName,
+    birth_Date: payload.birth_Date,
+    password: payload.password,
   }
 
   isLoading.value = true
   statusMessage.value = ''
 
   try {
-    const data = await postAuth('register', payload)
-    const okMessage = data?.message || data?.Message || 'Cadastro concluido com sucesso.'
+    const data = await postAuth('register', registerPayload)
+    const okMessage = translateAuthMessage(data?.message || data?.Message || 'Cadastro concluido com sucesso.')
 
     setStatus('success', okMessage)
     mode.value = 'login'
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Erro inesperado ao cadastrar.'
+    const message = error instanceof Error ? translateAuthMessage(error.message) : 'Erro inesperado ao cadastrar.'
     setStatus('error', message)
   } finally {
     isLoading.value = false
@@ -119,7 +178,7 @@ async function submitRegister(payload: RegisterPayload) {
       <AuthModeSwitch :mode="mode" @select="selectMode" />
 
       <LoginForm v-if="mode === 'login'" :is-loading="isLoading" @submit="submitLogin" />
-      <RegisterForm v-else :is-loading="isLoading" @submit="submitRegister" />
+      <RegisterForm v-else :is-loading="isLoading" :backend-base-url="apiBase" @submit="submitRegister" />
 
       <p v-if="statusMessage" class="auth-status"
         :class="statusType === 'success' ? 'auth-status--success' : 'auth-status--error'">

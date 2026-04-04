@@ -12,3 +12,7 @@ export type RegisterPayload = {
   birth_Date: string
   password: string
 }
+
+export type RegisterFormPayload = RegisterPayload & {
+  confirmPassword: string
+}

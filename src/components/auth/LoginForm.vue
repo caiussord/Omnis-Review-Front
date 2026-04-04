@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive } from 'vue'
+import { reactive, ref } from 'vue'
 import type { LoginPayload } from '../../types/auth'
 
 defineProps<{
@@ -15,6 +15,8 @@ const form = reactive<LoginPayload>({
   password: '',
 })
 
+const isPasswordVisible = ref(false)
+
 function handleSubmit() {
   // Uma validação simples antes de emitir
   if (form.email && form.password) {
@@ -28,15 +30,21 @@ function handleSubmit() {
 <template>
   <form class="auth-form" @submit.prevent="handleSubmit">
     <div class="auth-field">
-      <label for="email" class="auth-label">Email</label>
-      <input id="email" v-model="form.email" type="email" required autocomplete="email" placeholder="voce@email.com"
-        class="auth-input" />
+      <label for="email" class="auth-label">Email ou usuário</label>
+      <input id="email" v-model="form.email" type="text" required autocomplete="username"
+        placeholder="voce@email.com ou seu usuario" class="auth-input" />
     </div>
 
     <div class="auth-field">
       <label for="password" class="auth-label">Senha</label>
-      <input id="password" v-model="form.password" type="password" required autocomplete="current-password"
-        placeholder="Sua senha" class="auth-input" />
+      <div class="auth-password-field">
+        <input id="password" v-model="form.password" :type="isPasswordVisible ? 'text' : 'password'" required
+          autocomplete="current-password" placeholder="Sua senha" class="auth-input auth-input--password" />
+        <button type="button" class="auth-password-toggle" :aria-pressed="isPasswordVisible"
+          @click="isPasswordVisible = !isPasswordVisible">
+          {{ isPasswordVisible ? 'Ocultar' : 'Ver senha' }}
+        </button>
+      </div>
     </div>
 
     <button class="auth-submit" type="submit" :disabled="isLoading">
@@ -75,6 +83,34 @@ function handleSubmit() {
   color: #ffffff;
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.auth-password-field {
+  position: relative;
+}
+
+.auth-input--password {
+  padding-right: 6rem;
+}
+
+.auth-password-toggle {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 9999px;
+  background: rgba(99, 102, 241, 0.15);
+  padding: 0.4rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #dbeafe;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.15s ease;
+}
+
+.auth-password-toggle:hover {
+  background: rgba(99, 102, 241, 0.28);
 }
 
 .auth-input::placeholder {
