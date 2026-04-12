@@ -37,3 +37,8 @@ __screenshots__/
 
 # Vite
 *.timestamp-*-*.mjs
+
+# GitHub Copilot Configuration (Local)
+.github/agents/
+copilot-instructions.md
+copilot-configuration.md
