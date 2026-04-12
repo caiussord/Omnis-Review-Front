@@ -24,7 +24,7 @@ function translateMessage(message: string): string {
     if (normalizedMessage.includes('User not found')) {
         return 'Nao encontramos um usuario com esses dados.'
     }
- 
+
     if (normalizedMessage.includes('If the account exists, a reset link was sent.')) {
         return 'Caso seu dado esteja correto foi enviado um link de redefinicao de senha para seu email.'
     }

@@ -49,6 +49,7 @@ O frontend sobe em `http://localhost:8080`.
 ## Integracao com backend
 
 - No frontend, as chamadas usam `/api/auth/login` e `/api/auth/register`.
+- Na recuperacao de senha, o frontend envia um `resetPasswordUrl` absoluto apontando para `/reset-password`.
 - Em desenvolvimento, o Vite faz proxy de `/api` para `VITE_BACKEND_URL`.
 - Exemplo final de destino com a config atual:
   - `http://localhost:8080/api/auth/register` -> `https://localhost:7079/api/auth/register`
