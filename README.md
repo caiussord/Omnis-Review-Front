@@ -56,6 +56,112 @@ O frontend sobe em `http://localhost:8080`.
 
 Se der erro `502 Bad Gateway`, normalmente significa que o backend nao esta rodando ou a porta/protocolo (`http`/`https`) esta incorreto.
 
+## Implementacao da Home e Integracao com API
+
+Esta secao registra o que foi implementado na Home para carregar cards reais via API.
+
+### 1. Integracao de cards por categoria
+
+A Home passou a carregar dados reais para 4 secoes:
+
+- Livros
+- Filmes Populares
+- Jogos Populares
+- Series Populares
+
+### 2. Endpoints usados na Home
+
+Filmes e jogos usam endpoints diretos:
+
+- `/api/tmdb/movies/popular/card?page=1`
+- `/api/rawg/games/popular/card?page=1&pageSize=20`
+
+Livros e series usam fallback de rota para tolerar variacoes no backend:
+
+- Livros (tentativas em sequencia):
+  - `/api/google-books/search/card?query=Harry%20Potter&startIndex=0&maxResults=10`
+  - `/api/books/search/card?query=Harry%20Potter&startIndex=0&maxResults=10`
+  - `/api/googlebooks/search/card?query=Harry%20Potter&startIndex=0&maxResults=10`
+- Series (tentativas em sequencia):
+  - `/api/tmdb/series/popular/card?page=1`
+  - `/api/tmdb/tv/popular/card?page=1`
+  - `/api/tmdb/series/search/card?query=Breaking%20Bad&page=1`
+  - `/api/tmdb/tv/search/card?query=Breaking%20Bad&page=1`
+
+### 3. Estrategia de resiliencia
+
+- O carregamento usa Promise.allSettled para que falha de uma categoria nao derrube as outras.
+- Cada categoria e tratada de forma independente.
+- Quando uma secao falha, apenas aquela secao fica vazia e e exibido aviso no console.
+
+### 4. Mapeamento e normalizacao de dados
+
+Implementado mapeamento para o formato unico de card:
+
+- id
+- title
+- imageUrl
+- rating
+- category
+- genre (novo)
+
+Regras aplicadas:
+
+- Rating e normalizado para intervalo de 0 a 5.
+- Posters TMDB sao convertidos para URL completa com base `https://image.tmdb.org/t/p/w500`.
+- Quando nao existe imagem valida, usa placeholder `https://placehold.co/300x450?text=Sem+Imagem`.
+
+### 5. Compatibilidade de imagem para jogos
+
+Para jogos, a Home aceita multiplos formatos de campo vindos da API:
+
+- `backgroundImage`
+- `background_image`
+- `imageUrl`
+- `coverImage`
+- `posterPath` (fallback)
+
+Tambem foi adicionada normalizacao de URL para evitar quebra quando a API retornar caminhos em formatos diferentes.
+
+### 6. Categoria + genero no card
+
+Os cards agora exibem:
+
+- Badge da categoria (Book, Movie, Game, Series)
+- Badge de genero (novo)
+
+Origem do genero por categoria:
+
+- Livros: primeiro item de `categories`
+- Jogos: primeiro item de `genres[].name`
+- Filmes e series: primeiro `genreId` mapeado por tabela local de generos TMDB
+
+### 7. Ajustes visuais dos cards
+
+- Card usa nota real para renderizar estrelas.
+- Titulo com clamp em 2 linhas para manter consistencia visual.
+- Imagens gerais com `object-fit: contain` para reduzir cortes.
+- Cards de jogos com comportamento especifico:
+  - container com proporcao `16/9`
+  - imagem com `object-fit: cover`
+  - melhor aproveitamento para thumbnails de jogos
+
+### 8. Estado vazio por secao
+
+Cada secao da Home mostra mensagem de vazio quando nao houver itens:
+
+- livros
+- filmes
+- jogos
+- series
+
+Isso melhora a UX quando uma API retorna vazio ou quando uma rota nao esta disponivel.
+
+### 9. Arquivos impactados
+
+- `src/views/HomeView.vue`
+- `src/components/home/HighlightCard.vue`
+
 ## Scripts
 
 ```bash

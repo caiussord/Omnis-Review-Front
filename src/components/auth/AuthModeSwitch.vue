@@ -49,7 +49,7 @@ const emit = defineEmits<{
 }
 
 .auth-switch__button--active {
-  background: linear-gradient(135deg, #7c3aed, #3b82f6);
+  background: linear-gradient(135deg, #2D006B, #3E6B00);
   color: #ffffff;
 }
 </style>

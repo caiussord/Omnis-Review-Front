@@ -105,7 +105,7 @@ function handleSubmit() {
   transform: translateY(-50%);
   border: 0;
   border-radius: 9999px;
-  background: rgba(99, 102, 241, 0.15);
+  background: rgba(62, 107, 0, 0.15);
   padding: 0.4rem 0.75rem;
   font-size: 0.75rem;
   font-weight: 700;
@@ -115,7 +115,7 @@ function handleSubmit() {
 }
 
 .auth-password-toggle:hover {
-  background: rgba(99, 102, 241, 0.28);
+  background: rgba(62, 107, 0, 0.28);
 }
 
 .auth-input::placeholder {
@@ -123,15 +123,15 @@ function handleSubmit() {
 }
 
 .auth-input:focus {
-  border-color: rgb(96 165 250);
-  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
+  border-color: rgb(62, 107, 0);
+  box-shadow: 0 0 0 4px rgba(62, 107, 0, 0.2);
 }
 
 .auth-submit {
   margin-top: 0.5rem;
   border: 0;
   border-radius: 0.75rem;
-  background: linear-gradient(135deg, #7c3aed, #3b82f6);
+  background: linear-gradient(135deg, #2D006B, #3E6B00);
   padding: 0.75rem 1rem;
   font-weight: 700;
   color: #ffffff;
