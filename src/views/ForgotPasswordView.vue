@@ -141,7 +141,7 @@ async function handleSubmit() {
     top: -2.5rem;
     width: 260px;
     height: 260px;
-    background: #6f67ff;
+    background: #2D006B;
 }
 
 .forgot-page__glow--right {
@@ -149,7 +149,7 @@ async function handleSubmit() {
     bottom: -5rem;
     width: 340px;
     height: 340px;
-    background: #32a0ff;
+    background: #3E6B00;
 }
 
 .forgot-card {
@@ -222,15 +222,15 @@ async function handleSubmit() {
 }
 
 .forgot-input:focus {
-    border-color: rgb(96 165 250);
-    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
+    border-color: rgb(62, 107, 0);
+    box-shadow: 0 0 0 4px rgba(62, 107, 0, 0.2);
 }
 
 .forgot-submit {
     margin-top: 0.5rem;
     border: 0;
     border-radius: 0.75rem;
-    background: linear-gradient(135deg, #7c3aed, #3b82f6);
+    background: linear-gradient(135deg, #2D006B, #3E6B00);
     padding: 0.75rem 1rem;
     font-weight: 700;
     color: #ffffff;

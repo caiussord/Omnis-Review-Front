@@ -208,9 +208,7 @@ onMounted(async () => {
   padding: 1.5rem;
   color: #f8fafc;
   background:
-    radial-gradient(circle at 15% 15%, #504bd5 0%, rgba(80, 75, 213, 0) 35%),
-    radial-gradient(circle at 80% 15%, #2835bd 0%, rgba(40, 53, 189, 0) 40%),
-    linear-gradient(135deg, #130f40 0%, #1c2f73 45%, #202c92 100%);
+    linear-gradient(135deg, #130f40 0%, #2D006B 50%, #3E6B00 100%);
 }
 
 .auth-page__glow {
@@ -225,7 +223,7 @@ onMounted(async () => {
   top: -2.5rem;
   width: 260px;
   height: 260px;
-  background: #6f67ff;
+  background: #2D006B;
 }
 
 .auth-page__glow--right {
@@ -233,7 +231,7 @@ onMounted(async () => {
   bottom: -5rem;
   width: 340px;
   height: 340px;
-  background: #32a0ff;
+  background: #3E6B00;
 }
 
 .auth-card {

@@ -241,7 +241,7 @@ onBeforeUnmount(() => {
     top: -2.5rem;
     width: 260px;
     height: 260px;
-    background: #6f67ff;
+    background: #2D006B;
 }
 
 .reset-page__glow--right {
@@ -249,7 +249,7 @@ onBeforeUnmount(() => {
     bottom: -5rem;
     width: 340px;
     height: 340px;
-    background: #32a0ff;
+    background: #3E6B00;
 }
 
 .reset-card {
@@ -332,7 +332,7 @@ onBeforeUnmount(() => {
     transform: translateY(-50%);
     border: 0;
     border-radius: 9999px;
-    background: rgba(99, 102, 241, 0.15);
+    background: rgba(62, 107, 0, 0.15);
     padding: 0.4rem 0.75rem;
     font-size: 0.75rem;
     font-weight: 700;
@@ -342,7 +342,7 @@ onBeforeUnmount(() => {
 }
 
 .reset-password-toggle:hover {
-    background: rgba(99, 102, 241, 0.28);
+    background: rgba(62, 107, 0, 0.28);
 }
 
 .reset-input::placeholder {
@@ -350,8 +350,8 @@ onBeforeUnmount(() => {
 }
 
 .reset-input:focus {
-    border-color: rgb(96 165 250);
-    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
+    border-color: rgb(62, 107, 0);
+    box-shadow: 0 0 0 4px rgba(62, 107, 0, 0.2);
 }
 
 .password-rules {
@@ -387,7 +387,7 @@ onBeforeUnmount(() => {
     margin-top: 0.5rem;
     border: 0;
     border-radius: 0.75rem;
-    background: linear-gradient(135deg, #7c3aed, #3b82f6);
+    background: linear-gradient(135deg, #2D006B, #3E6B00);
     padding: 0.75rem 1rem;
     font-weight: 700;
     color: #ffffff;
