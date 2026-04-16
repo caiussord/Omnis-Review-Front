@@ -2,6 +2,10 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { HighlightCard } from '../components/home'
+import { apiClient, ApiError } from '../services/apiClient'
+import { authApi } from '../services/authApi'
+import { getAuthToken, clearAuthSession } from '../services/authSession'
+import type { CurrentUserResponse } from '../services/authApi'
 
 // Type definitions
 interface HighlightItem {
@@ -68,15 +72,14 @@ interface PaginatedResults<T> {
     results: T[]
 }
 
-interface HomeAuthResponse {
-    token?: string
-    expiration?: string
-    message?: string
-    Message?: string
-}
-
 // Router
 const router = useRouter()
+
+// Auth state
+const isAuthenticated = ref<boolean>(false)
+const currentUser = ref<CurrentUserResponse | null>(null)
+const userMenuOpen = ref<boolean>(false)
+let userMenuCloseTimeout: number | null = null
 
 // Search state
 const searchQuery = ref<string>('')
@@ -84,6 +87,7 @@ const isLoading = ref<boolean>(false)
 const quickLoginOpen = ref<boolean>(false)
 const quickLoginIdentifier = ref<string>('')
 const quickLoginPassword = ref<string>('')
+const quickLoginPasswordVisible = ref<boolean>(false)
 const quickLoginLoading = ref<boolean>(false)
 const quickLoginMessage = ref<string>('')
 const quickLoginMessageType = ref<'success' | 'error' | ''>('')
@@ -266,11 +270,7 @@ function getTmdbGenre(genreIds: number[] | undefined): string | undefined {
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
-    const response = await fetch(url)
-    if (!response.ok) {
-        throw new Error(`Falha ao buscar ${url}: ${response.status}`)
-    }
-    return response.json() as Promise<T>
+    return apiClient.get<T>(url)
 }
 
 async function fetchJsonWithFallback<T>(urls: string[]): Promise<T> {
@@ -478,41 +478,22 @@ async function submitQuickLogin(): Promise<void> {
     quickLoginMessageType.value = ''
 
     try {
-        const response = await fetch('/api/auth/login', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                email: quickLoginIdentifier.value.trim(),
-                password: quickLoginPassword.value,
-            }),
+        await authApi.login({
+            email: quickLoginIdentifier.value.trim(),
+            password: quickLoginPassword.value,
         })
 
-        let data: HomeAuthResponse | null = null
-        try {
-            data = (await response.json()) as HomeAuthResponse
-        } catch {
-            data = null
-        }
-
-        if (!response.ok) {
-            throw new Error(data?.message || data?.Message || 'Nao foi possivel fazer login.')
-        }
-
-        if (data?.token) {
-            localStorage.setItem('omnis_token', data.token)
-        }
-
-        if (data?.expiration) {
-            localStorage.setItem('omnis_token_expiration', data.expiration)
-        }
-
+        // Sincroniza o estado reativo após o login
+        await loadCurrentUser()
         setQuickLoginStatus('success', 'Login realizado com sucesso.')
         quickLoginOpen.value = false
-        await router.push('/blank')
+        quickLoginIdentifier.value = ''
+        quickLoginPassword.value = ''
     } catch (error) {
-        const message = error instanceof Error ? error.message : 'Erro inesperado ao fazer login.'
+        const message =
+            error instanceof ApiError || error instanceof Error
+                ? error.message
+                : 'Erro inesperado ao fazer login.'
         setQuickLoginStatus('error', message)
     } finally {
         quickLoginLoading.value = false
@@ -526,8 +507,59 @@ function handleSearch(): void {
     }
 }
 
+function openUserMenu(): void {
+    if (userMenuCloseTimeout !== null) {
+        clearTimeout(userMenuCloseTimeout)
+        userMenuCloseTimeout = null
+    }
+    userMenuOpen.value = true
+}
+
+function scheduleUserMenuClose(): void {
+    if (userMenuCloseTimeout !== null) {
+        clearTimeout(userMenuCloseTimeout)
+    }
+    userMenuCloseTimeout = window.setTimeout(() => {
+        userMenuOpen.value = false
+        userMenuCloseTimeout = null
+    }, 220)
+}
+
+async function logout(): Promise<void> {
+    const confirmed = window.confirm('Tem certeza que deseja sair?')
+    if (!confirmed) {
+        return
+    }
+
+    clearAuthSession()
+    isAuthenticated.value = false
+    currentUser.value = null
+    userMenuOpen.value = false
+    await router.push({ name: 'home' })
+}
+
+async function loadCurrentUser(): Promise<void> {
+    const token = getAuthToken()
+    if (!token) {
+        isAuthenticated.value = false
+        currentUser.value = null
+        return
+    }
+
+    try {
+        const user = await authApi.getCurrentUser()
+        currentUser.value = user
+        isAuthenticated.value = true
+    } catch (error) {
+        console.error('Erro ao carregar perfil do usuário:', error)
+        isAuthenticated.value = false
+        currentUser.value = null
+    }
+}
+
 onMounted(async () => {
     await loadHomeCards()
+    await loadCurrentUser()
     sectionKeys.forEach((key) => {
         carouselIndices.value[key] = 0
     })
@@ -542,6 +574,11 @@ onUnmounted(() => {
     if (quickLoginCloseTimeout !== null) {
         clearTimeout(quickLoginCloseTimeout)
         quickLoginCloseTimeout = null
+    }
+
+    if (userMenuCloseTimeout !== null) {
+        clearTimeout(userMenuCloseTimeout)
+        userMenuCloseTimeout = null
     }
 })
 </script>
@@ -574,8 +611,8 @@ onUnmounted(() => {
                         </div>
                     </div>
 
-                    <!-- Auth Buttons -->
-                    <div class="header__auth-buttons">
+                    <!-- Auth Buttons / User Menu -->
+                    <div v-if="!isAuthenticated" class="header__auth-buttons">
                         <div class="quick-login" @mouseenter="openQuickLogin" @mouseleave="scheduleQuickLoginClose">
                             <button @click="goToLogin" class="btn btn--secondary" type="button">
                                 Log in
@@ -586,8 +623,20 @@ onUnmounted(() => {
                                 <form class="quick-login__form" @submit.prevent="submitQuickLogin">
                                     <input v-model="quickLoginIdentifier" type="text" class="quick-login__input"
                                         placeholder="Email ou username" autocomplete="username" />
-                                    <input v-model="quickLoginPassword" type="password" class="quick-login__input"
-                                        placeholder="Senha" autocomplete="current-password" />
+                                    <div class="quick-login__password-field">
+                                        <input v-model="quickLoginPassword" :type="quickLoginPasswordVisible ? 'text' : 'password'" class="quick-login__input"
+                                            placeholder="Senha" autocomplete="current-password" />
+                                        <button type="button" class="quick-login__password-toggle" @click="quickLoginPasswordVisible = !quickLoginPasswordVisible">
+                                            <svg v-if="!quickLoginPasswordVisible" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                            </svg>
+                                            <svg v-else fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-4.803m5.596-3.856a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0z" />
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            </svg>
+                                        </button>
+                                    </div>
 
                                     <button type="submit" class="quick-login__submit" :disabled="quickLoginLoading">
                                         {{ quickLoginLoading ? 'Entrando...' : 'Entrar' }}
@@ -614,6 +663,44 @@ onUnmounted(() => {
                         <button @click="goToSignUp" class="btn btn--primary">
                             Sign up
                         </button>
+                    </div>
+                    <div v-else class="user-menu" @mouseenter="openUserMenu" @mouseleave="scheduleUserMenuClose">
+                        <button class="user-menu__trigger" type="button" @mouseenter="openUserMenu">
+                            <span class="user-menu__greeting">Olá, {{ currentUser?.userName }}</span>
+                        </button>
+
+                        <div v-if="userMenuOpen" class="user-menu__dropdown" @mouseenter="openUserMenu"
+                            @mouseleave="scheduleUserMenuClose">
+                            <button type="button" class="user-menu__item">
+                                <svg class="user-menu__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                </svg>
+                                Meu perfil
+                            </button>
+                            <button type="button" class="user-menu__item">
+                                <svg class="user-menu__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M12 4.354a4 4 0 110 5.292M15 4h6m-6 4h3m-3 4h9M6.5 14h3" />
+                                </svg>
+                                Meus amigos
+                            </button>
+                            <button type="button" class="user-menu__item">
+                                <svg class="user-menu__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                </svg>
+                                Favoritos
+                            </button>
+                            <div class="user-menu__divider"></div>
+                            <button type="button" class="user-menu__item user-menu__item--logout" @click="logout">
+                                <svg class="user-menu__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                                </svg>
+                                Sair
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -809,8 +896,8 @@ onUnmounted(() => {
 
 .home-page::before {
     background:
-        radial-gradient(circle at calc(34% + var(--flow-x)) calc(30% + var(--flow-y)), rgba(45, 0, 107, 0.86), transparent 24%),
-        radial-gradient(circle at calc(52% + var(--flow-x-inv)) calc(40% + var(--flow-y-inv)), rgba(62, 107, 0, 0.84), transparent 26%),
+        radial-gradient(circle at calc(34% + var(--flow-x)) calc(30% + var(--flow-y)), #2d006bdb, transparent 24%),
+        radial-gradient(circle at calc(52% + var(--flow-x-inv)) calc(40% + var(--flow-y-inv)), #3e6b00d6, transparent 26%),
         radial-gradient(circle at calc(16% + var(--flow-x)) calc(46% + var(--flow-y-inv)), rgba(62, 107, 0, 0.62), transparent 20%),
         radial-gradient(circle at calc(70% + var(--flow-x-inv)) calc(66% + var(--flow-y)), rgba(45, 0, 107, 0.74), transparent 24%),
         radial-gradient(circle at calc(84% + var(--flow-x)) calc(44% + var(--flow-y-inv)), rgba(45, 0, 107, 0.82), transparent 22%),
@@ -1046,6 +1133,12 @@ onUnmounted(() => {
     gap: 0.6rem;
 }
 
+.quick-login__password-field {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
 .quick-login__input {
     width: 100%;
     border: 1px solid rgba(255, 255, 255, 0.22);
@@ -1064,6 +1157,26 @@ onUnmounted(() => {
 .quick-login__input:focus {
     border-color: rgba(199, 210, 254, 0.6);
     box-shadow: 0 0 0 2px rgba(62, 107, 0, 0.14);
+}
+
+.quick-login__password-toggle {
+    position: absolute;
+    right: 0.5rem;
+    border: none;
+    background: transparent;
+    color: rgba(199, 210, 254, 0.7);
+    cursor: pointer;
+    padding: 0.25rem;
+    transition: color 0.15s ease;
+}
+
+.quick-login__password-toggle:hover {
+    color: rgba(199, 210, 254, 1);
+}
+
+.quick-login__password-toggle svg {
+    width: 1rem;
+    height: 1rem;
 }
 
 .quick-login__submit {
@@ -1119,6 +1232,94 @@ onUnmounted(() => {
 .quick-login__link:hover {
     color: #ffffff;
     text-decoration: underline;
+}
+
+/* User Menu */
+.user-menu {
+    position: relative;
+}
+
+.user-menu__trigger {
+    border: none;
+    background: transparent;
+    color: #c7d2fe;
+    font-size: 0.95rem;
+    font-weight: 500;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border-radius: 0.5rem;
+}
+
+.user-menu__trigger:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.user-menu__greeting {
+    background: linear-gradient(135deg, #a78bfa 0%, #c084fc 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+}
+
+.user-menu__dropdown {
+    position: absolute;
+    top: calc(100% + 0.6rem);
+    right: 0;
+    width: max(14rem, 100%);
+    min-width: 14rem;
+    padding: 0.5rem 0;
+    border-radius: 0.9rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(19, 18, 64, 0.95);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 14px 30px rgba(8, 8, 24, 0.45);
+    z-index: 80;
+}
+
+.user-menu__item {
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: #e2e8f0;
+    font-size: 0.9rem;
+    padding: 0.6rem 1rem;
+    text-align: left;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    transition: all 0.15s ease;
+}
+
+.user-menu__item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+}
+
+.user-menu__icon {
+    width: 1.1rem;
+    height: 1.1rem;
+    flex-shrink: 0;
+    opacity: 0.85;
+}
+
+.user-menu__item--logout {
+    color: #f87171;
+}
+
+.user-menu__item--logout:hover {
+    background: rgba(248, 113, 113, 0.12);
+    color: #fca5a5;
+}
+
+.user-menu__divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.12);
+    margin: 0.4rem 0;
 }
 
 /* Main Content */

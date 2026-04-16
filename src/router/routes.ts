@@ -20,6 +20,9 @@ export const routes: RouteRecordRaw[] = [
     path: '/blank',
     name: 'blank',
     component: BlankView,
+    meta: {
+      requiresAuth: true,
+    },
   },
   {
     path: '/forgot-password',

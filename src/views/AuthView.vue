@@ -3,13 +3,8 @@ import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { AuthModeSwitch, LoginForm, RegisterForm } from '../components/auth'
 import type { LoginPayload, Mode, RegisterFormPayload, RegisterPayload } from '../types/auth'
-
-type AuthResponse = {
-  token?: string
-  expiration?: string
-  message?: string
-  Message?: string
-}
+import { authApi } from '../services/authApi'
+import { ApiError } from '../services/apiClient'
 
 const mode = ref<Mode>('login')
 const isLoading = ref(false)
@@ -17,8 +12,6 @@ const statusMessage = ref('')
 const statusType = ref<'success' | 'error' | ''>('')
 const router = useRouter()
 const route = useRoute()
-
-const apiBase = '/api/auth'
 
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
@@ -37,6 +30,11 @@ function setStatus(type: 'success' | 'error', message: string) {
 
 function goToHome(): void {
   router.push({ name: 'home' })
+}
+
+function getPostLoginRedirectPath(): string {
+  const redirect = route.query.redirect
+  return typeof redirect === 'string' && redirect.startsWith('/') ? redirect : '/'
 }
 
 function applyModeFromQuery(): void {
@@ -80,31 +78,6 @@ function translateAuthMessage(message: string): string {
   return normalizedMessage
 }
 
-async function postAuth<TPayload extends Record<string, string>>(endpoint: 'login' | 'register', payload: TPayload) {
-  const response = await fetch(`${apiBase}/${endpoint}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  })
-
-  let data: AuthResponse | null = null
-
-  try {
-    data = (await response.json()) as AuthResponse
-  } catch {
-    data = null
-  }
-
-  if (!response.ok) {
-    const errorMessage = data?.message || data?.Message || 'Nao foi possivel concluir a requisicao.'
-    throw new Error(translateAuthMessage(errorMessage))
-  }
-
-  return data
-}
-
 async function submitLogin(payload: LoginPayload) {
   if (!payload.email || !payload.password) {
     setStatus('error', 'Preencha email, usuario e senha para entrar.')
@@ -115,20 +88,15 @@ async function submitLogin(payload: LoginPayload) {
   statusMessage.value = ''
 
   try {
-    const data = await postAuth('login', payload)
-
-    if (data?.token) {
-      localStorage.setItem('omnis_token', data.token)
-    }
-
-    if (data?.expiration) {
-      localStorage.setItem('omnis_token_expiration', data.expiration)
-    }
+    await authApi.login(payload)
 
     setStatus('success', 'Login realizado com sucesso.')
-    await router.push('/blank')
+    await router.push(getPostLoginRedirectPath())
   } catch (error) {
-    const message = error instanceof Error ? translateAuthMessage(error.message) : 'Erro inesperado ao fazer login.'
+    const message =
+      error instanceof ApiError || error instanceof Error
+        ? translateAuthMessage(error.message)
+        : 'Erro inesperado ao fazer login.'
     setStatus('error', message)
   } finally {
     isLoading.value = false
@@ -163,13 +131,16 @@ async function submitRegister(payload: RegisterFormPayload) {
   statusMessage.value = ''
 
   try {
-    const data = await postAuth('register', registerPayload)
+    const data = await authApi.register(registerPayload)
     const okMessage = translateAuthMessage(data?.message || data?.Message || 'Cadastro concluido com sucesso.')
 
     setStatus('success', okMessage)
     mode.value = 'login'
   } catch (error) {
-    const message = error instanceof Error ? translateAuthMessage(error.message) : 'Erro inesperado ao cadastrar.'
+    const message =
+      error instanceof ApiError || error instanceof Error
+        ? translateAuthMessage(error.message)
+        : 'Erro inesperado ao cadastrar.'
     setStatus('error', message)
   } finally {
     isLoading.value = false
@@ -209,7 +180,7 @@ onMounted(async () => {
 
       <LoginForm v-if="mode === 'login'" :is-loading="isLoading" @submit="submitLogin"
         @forgot-password="router.push('/forgot-password')" />
-      <RegisterForm v-else :is-loading="isLoading" :backend-base-url="apiBase" @submit="submitRegister" />
+      <RegisterForm v-else :is-loading="isLoading" @submit="submitRegister" />
 
       <p v-if="statusMessage" class="auth-status"
         :class="statusType === 'success' ? 'auth-status--success' : 'auth-status--error'">

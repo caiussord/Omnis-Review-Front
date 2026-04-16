@@ -1,15 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-
-type ResetPasswordResponse = {
-    message?: string
-    Message?: string
-}
+import { authApi } from '../services/authApi'
+import { ApiError } from '../services/apiClient'
 
 const router = useRouter()
 const route = useRoute()
-const apiBase = '/api/auth'
 
 const newPassword = ref('')
 const confirmPassword = ref('')
@@ -99,30 +95,11 @@ async function handleSubmit() {
     statusMessage.value = ''
 
     try {
-        const response = await fetch(`${apiBase}/reset-password`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                userId: userId.value,
-                token: token.value,
-                newPassword: newPassword.value,
-            }),
+        const data = await authApi.resetPassword({
+            userId: userId.value,
+            token: token.value,
+            newPassword: newPassword.value,
         })
-
-        let data: ResetPasswordResponse | null = null
-
-        try {
-            data = (await response.json()) as ResetPasswordResponse
-        } catch {
-            data = null
-        }
-
-        if (!response.ok) {
-            const errorMessage = data?.message || data?.Message || 'Nao foi possivel redefinir a senha.'
-            throw new Error(translateMessage(errorMessage))
-        }
 
         statusType.value = 'success'
         statusMessage.value = translateMessage(data?.message || data?.Message || 'Senha redefinida com sucesso.')
@@ -134,7 +111,11 @@ async function handleSubmit() {
         }, 1400)
     } catch (error) {
         statusType.value = 'error'
-        statusMessage.value = error instanceof Error ? error.message : 'Erro inesperado ao redefinir a senha.'
+        if (error instanceof ApiError || error instanceof Error) {
+            statusMessage.value = translateMessage(error.message)
+        } else {
+            statusMessage.value = 'Erro inesperado ao redefinir a senha.'
+        }
     } finally {
         isLoading.value = false
     }
@@ -224,9 +205,9 @@ onBeforeUnmount(() => {
     padding: 1.5rem;
     color: #f8fafc;
     background:
-        radial-gradient(circle at 15% 15%, #504bd5 0%, rgba(80, 75, 213, 0) 35%),
-        radial-gradient(circle at 80% 15%, #2835bd 0%, rgba(40, 53, 189, 0) 40%),
-        linear-gradient(135deg, #130f40 0%, #1c2f73 45%, #202c92 100%);
+        radial-gradient(circle at 15% 15%, #2D006B 0%, rgba(45, 0, 107, 0) 35%),
+        radial-gradient(circle at 80% 15%, #3E6B00 0%, rgba(62, 107, 0, 0) 40%),
+        linear-gradient(140deg, #1a0d4a 0%, #2d006b 34%, #2b3650 56%, #3e6b00 100%);
 }
 
 .reset-page__glow {
