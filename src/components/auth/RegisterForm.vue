@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import type { RegisterFormPayload } from '../../types/auth'
+import { authApi } from '../../services/authApi'
+import { ApiError } from '../../services/apiClient'
 
 const props = defineProps<{
   isLoading: boolean
-  backendBaseUrl: string
 }>()
 
 type UsernameCheckState = 'idle' | 'checking' | 'available' | 'taken' | 'error'
@@ -86,22 +87,7 @@ async function checkUsernameAvailability(username: string) {
   usernameCheckMessage.value = 'Verificando disponibilidade...'
 
   try {
-    const response = await fetch(`${props.backendBaseUrl}/username-exists?userName=${encodeURIComponent(normalizedUsername)}`, {
-      method: 'GET',
-      signal: usernameAbortController.signal,
-    })
-
-    if (!response.ok) {
-      if (response.status === 400) {
-        usernameCheckState.value = 'error'
-        usernameCheckMessage.value = 'Informe um nome de usuario.'
-        return
-      }
-
-      throw new Error('Falha ao verificar o nome de usuario.')
-    }
-
-    const data = (await response.json()) as { exists?: boolean; message?: string; Message?: string }
+    const data = await authApi.checkUsernameExists(normalizedUsername)
     const available = !(data.exists ?? false)
 
     if (available) {
@@ -113,6 +99,12 @@ async function checkUsernameAvailability(username: string) {
     }
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
+      return
+    }
+
+    if (error instanceof ApiError && error.status === 400) {
+      usernameCheckState.value = 'error'
+      usernameCheckMessage.value = 'Informe um nome de usuario.'
       return
     }
 

@@ -16,3 +16,10 @@ export type RegisterPayload = {
 export type RegisterFormPayload = RegisterPayload & {
   confirmPassword: string
 }
+
+export type CurrentUser = {
+  id: string
+  userName: string
+  email: string
+  roles: string[]
+}
