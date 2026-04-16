@@ -35,6 +35,17 @@ function setStatus(type: 'success' | 'error', message: string) {
   statusMessage.value = message
 }
 
+function goToHome(): void {
+  router.push({ name: 'home' })
+}
+
+function applyModeFromQuery(): void {
+  const queryMode = route.query.mode
+  if (queryMode === 'register' || queryMode === 'login') {
+    mode.value = queryMode
+  }
+}
+
 function translateAuthMessage(message: string): string {
   const normalizedMessage = message.trim()
 
@@ -166,6 +177,8 @@ async function submitRegister(payload: RegisterFormPayload) {
 }
 
 onMounted(async () => {
+  applyModeFromQuery()
+
   if (route.query.reset === 'success') {
     mode.value = 'login'
     setStatus('success', 'Senha alterada com sucesso. Faca login com a nova senha.')
@@ -176,11 +189,19 @@ onMounted(async () => {
 
 <template>
   <main class="auth-page">
+    <header class="auth-header">
+      <div class="auth-header__container">
+        <button type="button" class="auth-header__logo-button" @click="goToHome" aria-label="Voltar para home">
+          <img src="/assets/LogoOmnis.png" alt="OmnisReview Logo" class="auth-header__logo" />
+        </button>
+        <button type="button" class="auth-header__home-link" @click="goToHome">Voltar para home</button>
+      </div>
+    </header>
+
     <section class="auth-page__glow auth-page__glow--left" aria-hidden="true"></section>
     <section class="auth-page__glow auth-page__glow--right" aria-hidden="true"></section>
 
     <div class="auth-card">
-      <p class="auth-card__brand">Omnis Review</p>
       <h1 class="auth-card__title">Seu universo de reviews em um unico lugar</h1>
       <p class="auth-card__subtitle">Series, livros, jogos e muito mais. Entre agora ou crie sua conta.</p>
 
@@ -206,9 +227,63 @@ onMounted(async () => {
   place-items: center;
   overflow: hidden;
   padding: 1.5rem;
+  padding-top: 6.25rem;
   color: #f8fafc;
   background:
     linear-gradient(135deg, #130f40 0%, #2D006B 50%, #3E6B00 100%);
+}
+
+.auth-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(19, 18, 64, 0.28);
+  backdrop-filter: blur(8px);
+}
+
+.auth-header__container {
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: 0.8rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.auth-header__logo-button {
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.auth-header__logo {
+  height: 3.15rem;
+  width: auto;
+  transition: transform 0.2s ease;
+}
+
+.auth-header__logo-button:hover .auth-header__logo {
+  transform: scale(1.02);
+}
+
+.auth-header__home-link {
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: #e2e8f0;
+  padding: 0.45rem 0.8rem;
+  border-radius: 0.5rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.auth-header__home-link:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
 }
 
 .auth-page__glow {
@@ -248,26 +323,31 @@ onMounted(async () => {
   backdrop-filter: blur(10px);
 }
 
-.auth-card__brand {
-  margin: 0;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: #9dd3ff;
-}
-
 .auth-card__title {
-  margin: 0.5rem 0;
+  margin: 0;
   font-size: clamp(1.45rem, 3vw, 2rem);
   font-weight: 700;
   line-height: 1.2;
 }
 
 .auth-card__subtitle {
-  margin: 0 0 18px;
+  margin: 0.55rem 0 18px;
   font-size: 0.95rem;
   color: #c6ceff;
+}
+
+@media (max-width: 640px) {
+  .auth-page {
+    padding-top: 5.8rem;
+  }
+
+  .auth-header__logo {
+    height: 2.85rem;
+  }
+
+  .auth-header__home-link {
+    font-size: 0.78rem;
+  }
 }
 
 .auth-status {

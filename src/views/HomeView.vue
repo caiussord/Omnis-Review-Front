@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { HighlightCard } from '../components/home'
 
@@ -68,12 +68,33 @@ interface PaginatedResults<T> {
     results: T[]
 }
 
+interface HomeAuthResponse {
+    token?: string
+    expiration?: string
+    message?: string
+    Message?: string
+}
+
 // Router
 const router = useRouter()
 
 // Search state
 const searchQuery = ref<string>('')
 const isLoading = ref<boolean>(false)
+const quickLoginOpen = ref<boolean>(false)
+const quickLoginIdentifier = ref<string>('')
+const quickLoginPassword = ref<string>('')
+const quickLoginLoading = ref<boolean>(false)
+const quickLoginMessage = ref<string>('')
+const quickLoginMessageType = ref<'success' | 'error' | ''>('')
+let quickLoginCloseTimeout: number | null = null
+
+// Fluid background pointer state
+const pointerX = ref<number>(0.5)
+const pointerY = ref<number>(0.5)
+const pointerTargetX = ref<number>(0.5)
+const pointerTargetY = ref<number>(0.5)
+let pointerAnimationFrame: number | null = null
 
 // Carousel state
 const carouselIndices = ref<Record<SectionKey, number>>({
@@ -107,6 +128,57 @@ const sections = ref<Record<SectionKey, SectionData>>({
 })
 
 const sectionKeys: SectionKey[] = ['books', 'movies', 'games', 'series']
+
+const homeBackgroundStyle = computed<Record<string, string>>(() => {
+    const flowX = (pointerX.value - 0.5) * 14
+    const flowY = (pointerY.value - 0.5) * 14
+
+    return {
+        '--flow-x': `${flowX.toFixed(2)}%`,
+        '--flow-y': `${flowY.toFixed(2)}%`,
+        '--flow-x-inv': `${(-flowX).toFixed(2)}%`,
+        '--flow-y-inv': `${(-flowY).toFixed(2)}%`,
+    }
+})
+
+function animatePointer(): void {
+    const smoothing = 0.065
+    pointerX.value += (pointerTargetX.value - pointerX.value) * smoothing
+    pointerY.value += (pointerTargetY.value - pointerY.value) * smoothing
+
+    const deltaX = Math.abs(pointerTargetX.value - pointerX.value)
+    const deltaY = Math.abs(pointerTargetY.value - pointerY.value)
+
+    if (deltaX < 0.001 && deltaY < 0.001) {
+        pointerAnimationFrame = null
+        return
+    }
+
+    pointerAnimationFrame = requestAnimationFrame(animatePointer)
+}
+
+function startPointerAnimation(): void {
+    if (pointerAnimationFrame !== null) {
+        return
+    }
+
+    pointerAnimationFrame = requestAnimationFrame(animatePointer)
+}
+
+function handlePointerMove(event: PointerEvent | MouseEvent): void {
+    const target = event.currentTarget as HTMLElement | null
+    if (!target) {
+        return
+    }
+
+    const bounds = target.getBoundingClientRect()
+    const relativeX = (event.clientX - bounds.left) / bounds.width
+    const relativeY = (event.clientY - bounds.top) / bounds.height
+
+    pointerTargetX.value = Math.min(1, Math.max(0, relativeX))
+    pointerTargetY.value = Math.min(1, Math.max(0, relativeY))
+    startPointerAnimation()
+}
 
 const tmdbGenreMap: Record<number, string> = {
     12: 'Aventura',
@@ -300,28 +372,28 @@ async function loadHomeCards(): Promise<void> {
 // Computed properties for visible items
 const visibleBooks = computed(() => {
     const index = carouselIndices.value.books
-    return sections.value.books.items.slice(index, index + 5)
+    return sections.value.books.items.slice(index, index + 4)
 })
 
 const visibleMovies = computed(() => {
     const index = carouselIndices.value.movies
-    return sections.value.movies.items.slice(index, index + 5)
+    return sections.value.movies.items.slice(index, index + 4)
 })
 
 const visibleGames = computed(() => {
     const index = carouselIndices.value.games
-    return sections.value.games.items.slice(index, index + 5)
+    return sections.value.games.items.slice(index, index + 4)
 })
 
 const visibleSeries = computed(() => {
     const index = carouselIndices.value.series
-    return sections.value.series.items.slice(index, index + 5)
+    return sections.value.series.items.slice(index, index + 4)
 })
 
 // Carousel navigation
 function nextCarousel(sectionKey: string): void {
     const key = sectionKey as SectionKey
-    const maxIndex = Math.max(0, sections.value[key].items.length - 5)
+    const maxIndex = Math.max(0, sections.value[key].items.length - 4)
     if (carouselIndices.value[key] < maxIndex) {
         carouselIndices.value[key]++
     }
@@ -336,11 +408,115 @@ function prevCarousel(sectionKey: string): void {
 
 // Navigation handlers
 function goToLogin(): void {
-    router.push({ name: 'auth' })
+    router.push({ name: 'auth', query: { mode: 'login' } })
 }
 
 function goToSignUp(): void {
-    router.push({ name: 'auth' })
+    router.push({ name: 'auth', query: { mode: 'register' } })
+}
+
+function goToHome(): void {
+    router.push({ name: 'home' })
+}
+
+function openQuickLogin(): void {
+    if (quickLoginCloseTimeout !== null) {
+        clearTimeout(quickLoginCloseTimeout)
+        quickLoginCloseTimeout = null
+    }
+
+    quickLoginOpen.value = true
+}
+
+function scheduleQuickLoginClose(): void {
+    if (quickLoginLoading.value) {
+        return
+    }
+
+    if (quickLoginCloseTimeout !== null) {
+        clearTimeout(quickLoginCloseTimeout)
+    }
+
+    quickLoginCloseTimeout = window.setTimeout(() => {
+        quickLoginOpen.value = false
+        quickLoginCloseTimeout = null
+    }, 220)
+}
+
+function toggleQuickLogin(): void {
+    if (quickLoginCloseTimeout !== null) {
+        clearTimeout(quickLoginCloseTimeout)
+        quickLoginCloseTimeout = null
+    }
+
+    quickLoginOpen.value = !quickLoginOpen.value
+}
+
+function setQuickLoginStatus(type: 'success' | 'error', message: string): void {
+    quickLoginMessageType.value = type
+    quickLoginMessage.value = message
+}
+
+function goToRegisterFromQuickLogin(): void {
+    quickLoginOpen.value = false
+    router.push({ name: 'auth', query: { mode: 'register' } })
+}
+
+function goToForgotPassword(): void {
+    quickLoginOpen.value = false
+    router.push({ name: 'forgot-password' })
+}
+
+async function submitQuickLogin(): Promise<void> {
+    if (!quickLoginIdentifier.value.trim() || !quickLoginPassword.value) {
+        setQuickLoginStatus('error', 'Preencha email/usuario e senha.')
+        return
+    }
+
+    quickLoginLoading.value = true
+    quickLoginMessage.value = ''
+    quickLoginMessageType.value = ''
+
+    try {
+        const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                email: quickLoginIdentifier.value.trim(),
+                password: quickLoginPassword.value,
+            }),
+        })
+
+        let data: HomeAuthResponse | null = null
+        try {
+            data = (await response.json()) as HomeAuthResponse
+        } catch {
+            data = null
+        }
+
+        if (!response.ok) {
+            throw new Error(data?.message || data?.Message || 'Nao foi possivel fazer login.')
+        }
+
+        if (data?.token) {
+            localStorage.setItem('omnis_token', data.token)
+        }
+
+        if (data?.expiration) {
+            localStorage.setItem('omnis_token_expiration', data.expiration)
+        }
+
+        setQuickLoginStatus('success', 'Login realizado com sucesso.')
+        quickLoginOpen.value = false
+        await router.push('/blank')
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Erro inesperado ao fazer login.'
+        setQuickLoginStatus('error', message)
+    } finally {
+        quickLoginLoading.value = false
+    }
 }
 
 function handleSearch(): void {
@@ -356,17 +532,32 @@ onMounted(async () => {
         carouselIndices.value[key] = 0
     })
 })
+
+onUnmounted(() => {
+    if (pointerAnimationFrame !== null) {
+        cancelAnimationFrame(pointerAnimationFrame)
+        pointerAnimationFrame = null
+    }
+
+    if (quickLoginCloseTimeout !== null) {
+        clearTimeout(quickLoginCloseTimeout)
+        quickLoginCloseTimeout = null
+    }
+})
 </script>
 
 <template>
-    <div class="home-page">
+    <div class="home-page" :style="homeBackgroundStyle" @pointermove="handlePointerMove" @mousemove="handlePointerMove">
         <!-- Header -->
         <header class="header">
             <div class="header__container">
                 <div class="header__content">
                     <!-- Logo -->
                     <div class="header__logo">
-                        <img src="/assets/LogoOmnis.png" alt="OmnisReview Logo" />
+                        <button type="button" class="header__logo-button" @click="goToHome"
+                            aria-label="Voltar para a home">
+                            <img src="/assets/LogoOmnis.png" alt="OmnisReview Logo" />
+                        </button>
                     </div>
 
                     <!-- Search Bar -->
@@ -385,9 +576,41 @@ onMounted(async () => {
 
                     <!-- Auth Buttons -->
                     <div class="header__auth-buttons">
-                        <button @click="goToLogin" class="btn btn--secondary">
-                            Log in
-                        </button>
+                        <div class="quick-login" @mouseenter="openQuickLogin" @mouseleave="scheduleQuickLoginClose">
+                            <button @click="goToLogin" class="btn btn--secondary" type="button">
+                                Log in
+                            </button>
+
+                            <div v-if="quickLoginOpen" class="quick-login__panel" @mouseenter="openQuickLogin"
+                                @mouseleave="scheduleQuickLoginClose">
+                                <form class="quick-login__form" @submit.prevent="submitQuickLogin">
+                                    <input v-model="quickLoginIdentifier" type="text" class="quick-login__input"
+                                        placeholder="Email ou username" autocomplete="username" />
+                                    <input v-model="quickLoginPassword" type="password" class="quick-login__input"
+                                        placeholder="Senha" autocomplete="current-password" />
+
+                                    <button type="submit" class="quick-login__submit" :disabled="quickLoginLoading">
+                                        {{ quickLoginLoading ? 'Entrando...' : 'Entrar' }}
+                                    </button>
+
+                                    <p v-if="quickLoginMessage" class="quick-login__status"
+                                        :class="quickLoginMessageType === 'success' ? 'quick-login__status--success' : 'quick-login__status--error'">
+                                        {{ quickLoginMessage }}
+                                    </p>
+
+                                    <div class="quick-login__links">
+                                        <button type="button" class="quick-login__link"
+                                            @click="goToRegisterFromQuickLogin">
+                                            Nao e cadastrado? Clique aqui
+                                        </button>
+                                        <button type="button" class="quick-login__link" @click="goToForgotPassword">
+                                            Esqueci senha
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
                         <button @click="goToSignUp" class="btn btn--primary">
                             Sign up
                         </button>
@@ -423,7 +646,7 @@ onMounted(async () => {
                             </svg>
                         </button>
                         <button @click="nextCarousel('books')"
-                            :disabled="carouselIndices.books >= sections.books.items.length - 5"
+                            :disabled="carouselIndices.books >= sections.books.items.length - 4"
                             class="carousel-controls__button">
                             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -457,7 +680,7 @@ onMounted(async () => {
                             </svg>
                         </button>
                         <button @click="nextCarousel('movies')"
-                            :disabled="carouselIndices.movies >= sections.movies.items.length - 5"
+                            :disabled="carouselIndices.movies >= sections.movies.items.length - 4"
                             class="carousel-controls__button">
                             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -491,7 +714,7 @@ onMounted(async () => {
                             </svg>
                         </button>
                         <button @click="nextCarousel('games')"
-                            :disabled="carouselIndices.games >= sections.games.items.length - 5"
+                            :disabled="carouselIndices.games >= sections.games.items.length - 4"
                             class="carousel-controls__button">
                             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -525,7 +748,7 @@ onMounted(async () => {
                             </svg>
                         </button>
                         <button @click="nextCarousel('series')"
-                            :disabled="carouselIndices.series >= sections.series.items.length - 5"
+                            :disabled="carouselIndices.series >= sections.series.items.length - 4"
                             class="carousel-controls__button">
                             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -553,11 +776,93 @@ onMounted(async () => {
 }
 
 .home-page {
+    --flow-x: 0px;
+    --flow-y: 0px;
+    --flow-x-inv: 0px;
+    --flow-y-inv: 0px;
     position: relative;
-    background: linear-gradient(135deg, #1a0d4a 0%, #2D006B 30%, #3E6B00 70%, #1a1f4d 100%);
+    background:
+        radial-gradient(circle at calc(46% + var(--flow-x)) calc(38% + var(--flow-y)), rgba(45, 0, 107, 0.58), transparent 34%),
+        radial-gradient(circle at calc(54% + var(--flow-x-inv)) calc(50% + var(--flow-y-inv)), rgba(62, 107, 0, 0.6), transparent 36%),
+        radial-gradient(circle at calc(18% + var(--flow-x)) calc(28% + var(--flow-y-inv)), rgba(62, 107, 0, 0.38), transparent 34%),
+        radial-gradient(circle at calc(80% + var(--flow-x-inv)) calc(34% + var(--flow-y)), rgba(45, 0, 107, 0.5), transparent 36%),
+        radial-gradient(circle at calc(32% + var(--flow-x-inv)) calc(72% + var(--flow-y)), rgba(45, 0, 107, 0.34), transparent 42%),
+        radial-gradient(circle at calc(72% + var(--flow-x)) calc(20% + var(--flow-y-inv)), rgba(62, 107, 0, 0.42), transparent 42%),
+        linear-gradient(140deg, #1a0d4a 0%, #2d006b 34%, #2b3650 56%, #3e6b00 100%);
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+    isolation: isolate;
+}
+
+.home-page::before,
+.home-page::after {
+    content: '';
+    position: absolute;
+    inset: -20%;
+    pointer-events: none;
+    z-index: 0;
+    mix-blend-mode: screen;
+    filter: blur(40px) saturate(140%);
+}
+
+.home-page::before {
+    background:
+        radial-gradient(circle at calc(34% + var(--flow-x)) calc(30% + var(--flow-y)), rgba(45, 0, 107, 0.86), transparent 24%),
+        radial-gradient(circle at calc(52% + var(--flow-x-inv)) calc(40% + var(--flow-y-inv)), rgba(62, 107, 0, 0.84), transparent 26%),
+        radial-gradient(circle at calc(16% + var(--flow-x)) calc(46% + var(--flow-y-inv)), rgba(62, 107, 0, 0.62), transparent 20%),
+        radial-gradient(circle at calc(70% + var(--flow-x-inv)) calc(66% + var(--flow-y)), rgba(45, 0, 107, 0.74), transparent 24%),
+        radial-gradient(circle at calc(84% + var(--flow-x)) calc(44% + var(--flow-y-inv)), rgba(45, 0, 107, 0.82), transparent 22%),
+        radial-gradient(circle at calc(44% + var(--flow-x-inv)) calc(56% + var(--flow-y)), rgba(62, 107, 0, 0.66), transparent 22%);
+    animation: lava-flow-a 9s ease-in-out infinite alternate;
+}
+
+.home-page::after {
+    background:
+        radial-gradient(circle at calc(62% + var(--flow-x-inv)) calc(24% + var(--flow-y)), rgba(62, 107, 0, 0.92), transparent 24%),
+        radial-gradient(circle at calc(48% + var(--flow-x)) calc(56% + var(--flow-y-inv)), rgba(45, 0, 107, 0.8), transparent 26%),
+        radial-gradient(circle at calc(12% + var(--flow-x-inv)) calc(34% + var(--flow-y)), rgba(62, 107, 0, 0.64), transparent 18%),
+        radial-gradient(circle at calc(28% + var(--flow-x)) calc(50% + var(--flow-y-inv)), rgba(62, 107, 0, 0.76), transparent 22%),
+        radial-gradient(circle at calc(74% + var(--flow-x-inv)) calc(74% + var(--flow-y)), rgba(45, 0, 107, 0.62), transparent 22%),
+        radial-gradient(circle at calc(88% + var(--flow-x)) calc(58% + var(--flow-y-inv)), rgba(45, 0, 107, 0.72), transparent 20%);
+    animation: lava-flow-b 11s ease-in-out infinite alternate;
+}
+
+@keyframes lava-flow-a {
+    0% {
+        transform: translate3d(-6%, -3%, 0) scale(0.98);
+    }
+
+    50% {
+        transform: translate3d(7%, 4%, 0) scale(1.1);
+    }
+
+    100% {
+        transform: translate3d(-3%, 8%, 0) scale(0.94);
+    }
+}
+
+@keyframes lava-flow-b {
+    0% {
+        transform: translate3d(4%, 2%, 0) scale(1.03);
+    }
+
+    50% {
+        transform: translate3d(-7%, -5%, 0) scale(0.93);
+    }
+
+    100% {
+        transform: translate3d(6%, -2%, 0) scale(1.08);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .home-page::before,
+    .home-page::after {
+        animation: none;
+    }
 }
 
 /* Header Styles */
@@ -586,9 +891,30 @@ onMounted(async () => {
     flex-shrink: 0;
 }
 
+.header__logo-button {
+    border: none;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+}
+
 .header__logo img {
-    height: 2.5rem;
+    height: 3.6rem;
     width: auto;
+}
+
+.header__logo-button:hover img {
+    transform: scale(1.02);
+}
+
+.header__logo-button img {
+    transition: transform 0.2s ease;
+}
+
+@media (max-width: 640px) {
+    .header__logo img {
+        height: 3.1rem;
+    }
 }
 
 .header__search-wrapper {
@@ -694,6 +1020,105 @@ onMounted(async () => {
 .btn--secondary:hover {
     background: rgba(255, 255, 255, 0.2);
     color: white;
+}
+
+.quick-login {
+    position: relative;
+}
+
+.quick-login__panel {
+    position: absolute;
+    top: calc(100% + 0.6rem);
+    right: 0;
+    width: min(22rem, 88vw);
+    padding: 0.85rem;
+    border-radius: 0.9rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(19, 18, 64, 0.95);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 14px 30px rgba(8, 8, 24, 0.45);
+    z-index: 80;
+}
+
+.quick-login__form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.quick-login__input {
+    width: 100%;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 0.6rem;
+    background: rgba(255, 255, 255, 0.07);
+    color: #f8fafc;
+    font-size: 0.85rem;
+    padding: 0.55rem 0.75rem;
+    outline: none;
+}
+
+.quick-login__input::placeholder {
+    color: rgba(199, 210, 254, 0.75);
+}
+
+.quick-login__input:focus {
+    border-color: rgba(199, 210, 254, 0.6);
+    box-shadow: 0 0 0 2px rgba(62, 107, 0, 0.14);
+}
+
+.quick-login__submit {
+    border: none;
+    border-radius: 0.6rem;
+    padding: 0.55rem 0.8rem;
+    font-weight: 600;
+    color: #fff;
+    background: linear-gradient(135deg, #2D006B, #3E6B00);
+    cursor: pointer;
+}
+
+.quick-login__submit:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.quick-login__status {
+    margin: 0;
+    padding: 0.45rem 0.55rem;
+    border-radius: 0.55rem;
+    font-size: 0.78rem;
+}
+
+.quick-login__status--success {
+    background: rgba(46, 194, 138, 0.18);
+    border: 1px solid rgba(46, 194, 138, 0.35);
+    color: #9affd7;
+}
+
+.quick-login__status--error {
+    background: rgba(255, 104, 144, 0.16);
+    border: 1px solid rgba(255, 104, 144, 0.3);
+    color: #ffc7d6;
+}
+
+.quick-login__links {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2rem;
+}
+
+.quick-login__link {
+    border: none;
+    background: none;
+    color: #c7d2fe;
+    font-size: 0.78rem;
+    cursor: pointer;
+    padding: 0;
+}
+
+.quick-login__link:hover {
+    color: #ffffff;
+    text-decoration: underline;
 }
 
 /* Main Content */
@@ -810,7 +1235,7 @@ onMounted(async () => {
 
 @media (min-width: 1024px) {
     .carousel-grid {
-        grid-template-columns: repeat(5, 1fr);
+        grid-template-columns: repeat(4, 1fr);
     }
 }
 </style>

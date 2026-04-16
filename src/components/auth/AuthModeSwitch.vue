@@ -40,12 +40,13 @@ const emit = defineEmits<{
   background: transparent;
   padding: 0.5rem 0.75rem;
   font-weight: 600;
-  color: rgb(199 210 254);
+  color: rgba(255, 255, 255, 0.82);
   transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
 }
 
 .auth-switch__button:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
 }
 
 .auth-switch__button--active {
